@@ -18,7 +18,10 @@
       "Bash(git commit:*)",
       "Bash(curl -s http://localhost:5000/api/analysis/reasoning-cost)",
       "Bash(curl -s http://localhost:5000/api/health)",
-      "Bash(curl -s http://localhost:5000/api/analysis/pareto-frontier)"
+      "Bash(curl -s http://localhost:5000/api/analysis/pareto-frontier)",
+      "Bash(grep -l '\"guessed\": false' *.json)",
+      "Bash(npm start:*)",
+      "Bash(curl http://localhost:5000/api/analysis/error-modes)"
     ]
   }
 }

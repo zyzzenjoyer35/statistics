@@ -15,6 +15,7 @@ const ROOT_DIR = path.resolve(__dirname, '..');
 const LOGS_DIR = path.join(ROOT_DIR, 'logs');
 const DATASET_PATH = path.join(ROOT_DIR, 'dataset.json');
 const CATEGORIZED_DATASET_PATH = path.join(ROOT_DIR, 'categorized_dataset.json');
+const CLASSIFIED_ERRORS_PATH = path.join(ROOT_DIR, 'classified_errors.json');
 
 // Helper function to read JSON file
 function readJsonFile(filePath) {
@@ -642,6 +643,137 @@ app.get('/api/analysis/pareto-frontier', (req, res) => {
     }
 });
 
+// API: Error mode analysis
+app.get('/api/analysis/error-modes', (req, res) => {
+    try {
+        // Load classified errors
+        const classifiedErrors = readJsonFile(CLASSIFIED_ERRORS_PATH);
+        if (!classifiedErrors || classifiedErrors.length === 0) {
+            return res.status(404).json({ error: 'Classified errors not found. Please run error classification first.' });
+        }
+
+        // Error categories
+        const errorCategories = {
+            1: 'Synonim / bliskoznacznik',
+            2: 'Powiązana koncepcja',
+            3: 'Hiperonim / hiponim',
+            4: 'Błąd długości',
+            5: 'Błąd formy gramatycznej',
+            6: 'Błąd diakrytyki',
+            7: 'Halucynacja',
+            8: 'Odmowa / nieodpowiedź'
+        };
+
+        // Initialize results structure
+        const results = {
+            models: [],
+            errorCategories,
+            errorMatrix: {}, // model -> category -> percentage
+            categorySummary: {}, // category -> total errors
+            totalErrors: classifiedErrors.length
+        };
+
+        // Calculate total errors per category
+        Object.keys(errorCategories).forEach(cat => {
+            results.categorySummary[cat] = {
+                name: errorCategories[cat],
+                count: 0,
+                percentage: 0
+            };
+        });
+
+        classifiedErrors.forEach(error => {
+            const cat = error.category;
+            if (results.categorySummary[cat]) {
+                results.categorySummary[cat].count++;
+            }
+        });
+
+        // Calculate percentages
+        Object.keys(results.categorySummary).forEach(cat => {
+            results.categorySummary[cat].percentage =
+                (results.categorySummary[cat].count / results.totalErrors) * 100;
+        });
+
+        // Group errors by model
+        const errorsByModel = {};
+        classifiedErrors.forEach(error => {
+            const model = error.model;
+            if (!errorsByModel[model]) {
+                errorsByModel[model] = [];
+            }
+            errorsByModel[model].push(error);
+        });
+
+        // Build error matrix for each model
+        Object.keys(errorsByModel).forEach(model => {
+            const modelErrors = errorsByModel[model];
+            const totalModelErrors = modelErrors.length;
+
+            // Initialize category counts for this model
+            const categoryCounts = {};
+            Object.keys(errorCategories).forEach(cat => {
+                categoryCounts[cat] = 0;
+            });
+
+            // Count errors per category
+            modelErrors.forEach(error => {
+                const cat = error.category;
+                categoryCounts[cat]++;
+            });
+
+            // Calculate percentages
+            const errorDistribution = {};
+            Object.keys(categoryCounts).forEach(cat => {
+                errorDistribution[cat] = (categoryCounts[cat] / totalModelErrors) * 100;
+            });
+
+            // Find dominant error type for this model
+            let dominantCategory = null;
+            let dominantCount = 0;
+            Object.keys(categoryCounts).forEach(cat => {
+                if (categoryCounts[cat] > dominantCount) {
+                    dominantCount = categoryCounts[cat];
+                    dominantCategory = cat;
+                }
+            });
+
+            // Calculate average attempts per error
+            const avgAttempts = modelErrors.reduce((sum, e) => sum + (e.attempts_count || 0), 0) / totalModelErrors;
+
+            results.models.push({
+                name: model,
+                totalErrors: totalModelErrors,
+                errorDistribution,
+                dominantCategory,
+                dominantCategoryName: errorCategories[dominantCategory],
+                dominantPercentage: errorDistribution[dominantCategory],
+                avgAttempts
+            });
+
+            results.errorMatrix[model] = errorDistribution;
+        });
+
+        // Sort models by total errors
+        results.models.sort((a, b) => b.totalErrors - a.totalErrors);
+
+        // Sort category summary by count
+        const sortedCategories = Object.keys(results.categorySummary)
+            .map(cat => ({
+                id: cat,
+                ...results.categorySummary[cat]
+            }))
+            .sort((a, b) => b.count - a.count);
+        results.categorySummary = sortedCategories;
+
+        res.json(results);
+
+    } catch (error) {
+        console.error('Error in error mode analysis:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // API: Health check
 app.get('/api/health', (req, res) => {
     res.json({
@@ -649,6 +781,7 @@ app.get('/api/health', (req, res) => {
         logsDir: fs.existsSync(LOGS_DIR),
         datasetExists: fs.existsSync(DATASET_PATH),
         categorizedDatasetExists: fs.existsSync(CATEGORIZED_DATASET_PATH),
+        classifiedErrorsExists: fs.existsSync(CLASSIFIED_ERRORS_PATH),
         logFileCount: getLogFiles().length
     });
 });
@@ -663,4 +796,5 @@ app.listen(PORT, () => {
     console.log(`  GET /api/analysis/word-length`);
     console.log(`  GET /api/analysis/reasoning-cost`);
     console.log(`  GET /api/analysis/pareto-frontier`);
+    console.log(`  GET /api/analysis/error-modes`);
 });

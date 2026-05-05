@@ -11,6 +11,7 @@ function App() {
   const [wordLengthData, setWordLengthData] = useState(null);
   const [reasoningData, setReasoningData] = useState(null);
   const [paretoData, setParetoData] = useState(null);
+  const [errorModesData, setErrorModesData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -23,6 +24,8 @@ function App() {
       fetchReasoningData();
     } else if (activeTab === 'pareto') {
       fetchParetoData();
+    } else if (activeTab === 'error-modes') {
+      fetchErrorModesData();
     }
   }, [activeTab]);
 
@@ -77,6 +80,20 @@ function App() {
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to fetch Pareto frontier data');
       console.error('Error fetching Pareto analysis:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchErrorModesData = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get(`${API_BASE}/analysis/error-modes`);
+      setErrorModesData(response.data);
+      setError(null);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to fetch error modes data');
+      console.error('Error fetching error modes analysis:', err);
     } finally {
       setLoading(false);
     }
@@ -687,6 +704,146 @@ function App() {
     );
   };
 
+  // Error Modes Analysis Components
+  const renderErrorModesSummary = () => {
+    if (!errorModesData || !errorModesData.categorySummary) return null;
+
+    return (
+      <div className="comparison-card">
+        <h3>Podsumowanie trybów awarii</h3>
+        <p className="subtitle">Rozkład błędów według kategorii (wszystkie modele)</p>
+        <div className="comparison-stats">
+          <div className="stat-box highlight">
+            <h4>Całkowita liczba błędów</h4>
+            <p className="stat-value">{errorModesData.totalErrors}</p>
+            <p className="stat-label">Zaklasyfikowanych błędów</p>
+          </div>
+        </div>
+
+        <div className="chart-container">
+          <h4>Rozkład błędów według kategorii</h4>
+          <ResponsiveContainer width="100%" height={400}>
+            <BarChart data={errorModesData.categorySummary}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis
+                dataKey="name"
+                angle={-15}
+                textAnchor="end"
+                height={100}
+                interval={0}
+              />
+              <YAxis label={{ value: 'Liczba błędów', angle: -90, position: 'insideLeft' }} />
+              <Tooltip
+                formatter={(value, name) => [value, 'Liczba']}
+                content={({ active, payload }) => {
+                  if (active && payload && payload.length) {
+                    const data = payload[0].payload;
+                    return (
+                      <div className="custom-tooltip">
+                        <p><strong>{data.name}</strong></p>
+                        <p>Liczba: {data.count}</p>
+                        <p>Procent: {data.percentage.toFixed(1)}%</p>
+                      </div>
+                    );
+                  }
+                  return null;
+                }}
+              />
+              <Bar dataKey="count" fill="#e74c3c" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    );
+  };
+
+  const renderErrorModesMatrix = () => {
+    if (!errorModesData || !errorModesData.models || !errorModesData.errorCategories) return null;
+
+    return (
+      <div className="table-container">
+        <h3>Macierz trybów awarii według modeli</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Model</th>
+              {Object.values(errorModesData.errorCategories).map((cat, idx) => (
+                <th key={idx}>{cat}</th>
+              ))}
+              <th>Dominujący błąd</th>
+              <th>Średnie próby</th>
+            </tr>
+          </thead>
+          <tbody>
+            {errorModesData.models.map((model, idx) => (
+              <tr key={model.name}>
+                <td className="model-name">{model.name}</td>
+                {Object.keys(errorModesData.errorCategories).map(catId => (
+                  <td key={catId}>
+                    {model.errorDistribution[catId] !== undefined ?
+                      `${model.errorDistribution[catId].toFixed(1)}%` : '0%'}
+                  </td>
+                ))}
+                <td>
+                  <span className="badge" style={{ background: '#e74c3c', color: 'white' }}>
+                    {model.dominantCategoryName}
+                  </span>
+                </td>
+                <td>{model.avgAttempts.toFixed(1)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  const renderModelErrorProfile = () => {
+    if (!errorModesData || !errorModesData.models || errorModesData.models.length === 0) return null;
+
+    // Prepare data for bar chart
+    const chartData = errorModesData.models.map(m => ({
+      model: m.name,
+      totalErrors: m.totalErrors,
+      dominantPercent: m.dominantPercentage
+    }));
+
+    return (
+      <div className="chart-container">
+        <h2>Profil błędów według modeli</h2>
+        <ResponsiveContainer width="100%" height={400}>
+          <BarChart data={chartData}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="model" angle={-15} textAnchor="end" height={100} />
+            <YAxis label={{ value: 'Liczba błędów', angle: -90, position: 'insideLeft' }} />
+            <Tooltip
+              formatter={(value, name) => [value, name === 'totalErrors' ? 'Błędy' : 'Procent']}
+              content={({ active, payload }) => {
+                if (active && payload && payload.length) {
+                  const data = payload[0].payload;
+                  return (
+                    <div className="custom-tooltip">
+                      <p><strong>{data.model}</strong></p>
+                      <p>Liczba błędów: {data.totalErrors}</p>
+                      <p>Dominujący typ: {data.dominantPercent.toFixed(1)}%</p>
+                    </div>
+                  );
+                }
+                return null;
+              }}
+            />
+            <Legend />
+            <Bar dataKey="totalErrors" fill="#e74c3c" name="Liczba błędów" />
+          </BarChart>
+        </ResponsiveContainer>
+        <p className="info-text">
+          <strong>Profil błędów</strong> pokazuje "osobowość" każdego modelu - jakie typy błędów najczęściej popełnia.
+          Różne modele mogą mieć różne wzorce błędów (np. jeden częściej podaje synonimy, inny halucynuje).
+        </p>
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div className="App">
@@ -709,6 +866,7 @@ function App() {
             else if (activeTab === 'word-length') fetchWordLengthData();
             else if (activeTab === 'reasoning') fetchReasoningData();
             else if (activeTab === 'pareto') fetchParetoData();
+            else if (activeTab === 'error-modes') fetchErrorModesData();
           }} className="retry-button">
             Spróbuj ponownie
           </button>
@@ -754,6 +912,12 @@ function App() {
             onClick={() => setActiveTab('pareto')}
           >
             Punkt 4: Granica Pareto
+          </button>
+          <button
+            className={`tab-button ${activeTab === 'error-modes' ? 'active' : ''}`}
+            onClick={() => setActiveTab('error-modes')}
+          >
+            Punkt 5: Tryby awarii
           </button>
         </div>
       </header>
@@ -856,6 +1020,19 @@ function App() {
 
             {/* Detailed Table */}
             {renderParetoTable()}
+          </>
+        )}
+
+        {activeTab === 'error-modes' && errorModesData && (
+          <>
+            {/* Summary */}
+            {renderErrorModesSummary()}
+
+            {/* Model Error Profile Chart */}
+            {renderModelErrorProfile()}
+
+            {/* Error Matrix Table */}
+            {renderErrorModesMatrix()}
           </>
         )}
       </main>
