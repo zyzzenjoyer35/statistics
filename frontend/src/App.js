@@ -9,7 +9,6 @@ function App() {
   const [analysisData, setAnalysisData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [selectedCategory, setSelectedCategory] = useState(null);
 
   useEffect(() => {
     fetchAnalysisData();
