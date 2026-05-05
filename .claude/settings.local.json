@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls logs/*.json)",
+      "Bash(python:*)",
+      "Bash(npm --version)",
+      "Bash(npm install:*)",
+      "Bash(node server.js)",
+      "Bash(curl http://localhost:5000/api/health)",
+      "Bash(curl -s http://localhost:5000/api/analysis/semantic-taxonomy)",
+      "Bash(git add:*)",
+      "Bash(git commit -m 'Add React + Node.js dashboard for semantic taxonomy analysis \\(Point 1\\):*)"
+    ]
+  }
+}

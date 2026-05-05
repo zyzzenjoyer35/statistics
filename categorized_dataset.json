@@ -1,0 +1,135 @@
+[
+  {
+    "pytanie": "Podwodny grunt",
+    "liter": 3,
+    "odpowiedz": "DNO",
+    "category": 2,
+    "category_name": "Definicje słownikowe"
+  },
+  {
+    "pytanie": "Kropla smutku",
+    "liter": 3,
+    "odpowiedz": "ŁZA",
+    "category": 3,
+    "category_name": "Metafora i gra słowna"
+  },
+  {
+    "pytanie": "Góral z dowcipów",
+    "liter": 4,
+    "odpowiedz": "BACA",
+    "category": 5,
+    "category_name": "Polskie realia kulturowe"
+  },
+  {
+    "pytanie": "Blada u chorego",
+    "liter": 4,
+    "odpowiedz": "CERA",
+    "category": 2,
+    "category_name": "Definicje słownikowe"
+  },
+  {
+    "pytanie": "Podróż przez morze",
+    "liter": 4,
+    "odpowiedz": "REJS",
+    "category": 2,
+    "category_name": "Definicje słownikowe"
+  },
+  {
+    "pytanie": "Sala sportowa",
+    "liter": 4,
+    "odpowiedz": "HALA",
+    "category": 2,
+    "category_name": "Definicje słownikowe"
+  },
+  {
+    "pytanie": "Połowica władcy zwierząt",
+    "liter": 5,
+    "odpowiedz": "LWICA",
+    "category": 1,
+    "category_name": "Wiedza ogólna / encyklopedyczna"
+  },
+  {
+    "pytanie": "Fallon, komik z TV",
+    "liter": 5,
+    "odpowiedz": "JIMMY",
+    "category": 4,
+    "category_name": "Nazwy własne i popkultura"
+  },
+  {
+    "pytanie": "Siostra Balladyny",
+    "liter": 5,
+    "odpowiedz": "ALINA",
+    "category": 5,
+    "category_name": "Polskie realia kulturowe"
+  },
+  {
+    "pytanie": "Okrągłe skrzyżowanie",
+    "liter": 5,
+    "odpowiedz": "RONDO",
+    "category": 2,
+    "category_name": "Definicje słownikowe"
+  },
+  {
+    "pytanie": "Imię Kurosawy, reżysera",
+    "liter": 5,
+    "odpowiedz": "AKIRA",
+    "category": 1,
+    "category_name": "Wiedza ogólna / encyklopedyczna"
+  },
+  {
+    "pytanie": "Nabranie powietrza do płuc",
+    "liter": 5,
+    "odpowiedz": "WDECH",
+    "category": 2,
+    "category_name": "Definicje słownikowe"
+  },
+  {
+    "pytanie": "Listwa stołu bilardowego",
+    "liter": 5,
+    "odpowiedz": "BANDA",
+    "category": 2,
+    "category_name": "Definicje słownikowe"
+  },
+  {
+    "pytanie": "Naczynie na kakao",
+    "liter": 5,
+    "odpowiedz": "KUBEK",
+    "category": 2,
+    "category_name": "Definicje słownikowe"
+  },
+  {
+    "pytanie": "Kaczor z kreskówek",
+    "liter": 6,
+    "odpowiedz": "DONALD",
+    "category": 4,
+    "category_name": "Nazwy własne i popkultura"
+  },
+  {
+    "pytanie": "Buduje igloo",
+    "liter": 7,
+    "odpowiedz": "ESKIMOS",
+    "category": 1,
+    "category_name": "Wiedza ogólna / encyklopedyczna"
+  },
+  {
+    "pytanie": "Internetowa sprzedaż",
+    "liter": 7,
+    "odpowiedz": "EHANDEL",
+    "category": 1,
+    "category_name": "Wiedza ogólna / encyklopedyczna"
+  },
+  {
+    "pytanie": "Naprawa uszkodzenia",
+    "liter": 9,
+    "odpowiedz": "REPARACJA",
+    "category": 2,
+    "category_name": "Definicje słownikowe"
+  },
+  {
+    "pytanie": "Obcy wtręt językowy",
+    "liter": 10,
+    "odpowiedz": "MAKARONIZM",
+    "category": 1,
+    "category_name": "Wiedza ogólna / encyklopedyczna"
+  }
+]
