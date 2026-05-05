@@ -387,6 +387,152 @@ app.get('/api/analysis/word-length', (req, res) => {
     }
 });
 
+// API: Reasoning cost analysis
+app.get('/api/analysis/reasoning-cost', (req, res) => {
+    try {
+        // Load all log files
+        const logFiles = getLogFiles();
+        if (logFiles.length === 0) {
+            return res.status(404).json({ error: 'No log files found in logs/ directory' });
+        }
+
+        // Identify reasoning models (models that have reasoning tokens)
+        const reasoningModels = ['claude-opus', 'claude-sonnet', 'gpt-oss', 'qwen'];
+
+        // First pass: calculate question difficulty (average hints required)
+        const questionDifficulty = {}; // question -> avg hints across all models
+        const questionHints = {}; // question -> array of hints from each model
+
+        logFiles.forEach(logFile => {
+            const logData = readJsonFile(logFile);
+            if (!logData || logData.length === 0) return;
+
+            logData.forEach(logEntry => {
+                const question = logEntry.question;
+                const hints = logEntry.guessed ? (logEntry.required_hints || 0) : null;
+
+                if (hints !== null) {
+                    if (!questionHints[question]) {
+                        questionHints[question] = [];
+                    }
+                    questionHints[question].push(hints);
+                }
+            });
+        });
+
+        // Calculate average difficulty for each question
+        Object.keys(questionHints).forEach(question => {
+            const hints = questionHints[question];
+            const avgHints = hints.reduce((sum, h) => sum + h, 0) / hints.length;
+            questionDifficulty[question] = avgHints;
+        });
+
+        // Second pass: collect reasoning tokens for reasoning models
+        const modelData = [];
+
+        logFiles.forEach(logFile => {
+            const logData = readJsonFile(logFile);
+            if (!logData || logData.length === 0) return;
+
+            const filename = path.basename(logFile);
+            const modelName = parseModelName(filename);
+            const fullModelName = `openrouter/${modelName}`;
+
+            // Check if this is a reasoning model
+            const isReasoningModel = reasoningModels.some(rm =>
+                modelName.toLowerCase().includes(rm.toLowerCase())
+            );
+
+            if (!isReasoningModel) return;
+
+            // Collect reasoning tokens for each question
+            const reasoningData = [];
+
+            logData.forEach(logEntry => {
+                const question = logEntry.question;
+                const difficulty = questionDifficulty[question];
+
+                if (difficulty === undefined) return;
+
+                // Extract reasoning tokens from attempts
+                let totalReasoningTokens = 0;
+                let attemptCount = 0;
+
+                if (logEntry.attempts && logEntry.attempts.length > 0) {
+                    logEntry.attempts.forEach(attempt => {
+                        const usage = attempt.usage || {};
+                        const completionDetails = usage.completion_tokens_details || {};
+                        const reasoningTokens = completionDetails.reasoning_tokens || 0;
+
+                        if (reasoningTokens > 0) {
+                            totalReasoningTokens += reasoningTokens;
+                            attemptCount++;
+                        }
+                    });
+                }
+
+                const avgReasoningTokens = attemptCount > 0 ? totalReasoningTokens / attemptCount : 0;
+
+                reasoningData.push({
+                    question,
+                    difficulty,
+                    avgReasoningTokens,
+                    hintsRequired: logEntry.required_hints || 0,
+                    guessed: logEntry.guessed
+                });
+            });
+
+            // Calculate Pearson correlation between difficulty and reasoning tokens
+            const correlation = calculatePearsonCorrelation(
+                reasoningData.map(d => d.difficulty),
+                reasoningData.map(d => d.avgReasoningTokens)
+            );
+
+            // Separate "trivial" questions (0 hints required)
+            const trivialQuestions = reasoningData.filter(d => d.hintsRequired === 0 && d.avgReasoningTokens > 0);
+            const avgTrivialReasoningTokens = trivialQuestions.length > 0 ?
+                trivialQuestions.reduce((sum, d) => sum + d.avgReasoningTokens, 0) / trivialQuestions.length : 0;
+
+            modelData.push({
+                modelName,
+                fullName: fullModelName,
+                reasoningData,
+                correlation,
+                trivialQuestionCount: trivialQuestions.length,
+                avgTrivialReasoningTokens,
+                totalQuestions: reasoningData.length
+            });
+        });
+
+        res.json({
+            models: modelData,
+            questionCount: Object.keys(questionDifficulty).length
+        });
+
+    } catch (error) {
+        console.error('Error in reasoning cost analysis:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Helper function to calculate Pearson correlation
+function calculatePearsonCorrelation(x, y) {
+    if (x.length !== y.length || x.length < 2) return 0;
+
+    const n = x.length;
+    const sumX = x.reduce((a, b) => a + b, 0);
+    const sumY = y.reduce((a, b) => a + b, 0);
+    const sumXY = x.reduce((sum, xi, i) => sum + xi * y[i], 0);
+    const sumX2 = x.reduce((sum, xi) => sum + xi * xi, 0);
+    const sumY2 = y.reduce((sum, yi) => sum + yi * yi, 0);
+
+    const numerator = n * sumXY - sumX * sumY;
+    const denominator = Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
+
+    if (denominator === 0) return 0;
+    return numerator / denominator;
+}
+
 // API: Health check
 app.get('/api/health', (req, res) => {
     res.json({
@@ -406,4 +552,5 @@ app.listen(PORT, () => {
     console.log(`  GET /api/questions`);
     console.log(`  GET /api/analysis/semantic-taxonomy`);
     console.log(`  GET /api/analysis/word-length`);
+    console.log(`  GET /api/analysis/reasoning-cost`);
 });

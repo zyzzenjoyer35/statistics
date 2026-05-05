@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart, Bar, LineChart, Line, ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
 import './App.css';
 
 const API_BASE = 'http://localhost:5000/api';
@@ -9,14 +9,17 @@ function App() {
   const [activeTab, setActiveTab] = useState('semantic');
   const [analysisData, setAnalysisData] = useState(null);
   const [wordLengthData, setWordLengthData] = useState(null);
+  const [reasoningData, setReasoningData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     if (activeTab === 'semantic') {
       fetchAnalysisData();
-    } else {
+    } else if (activeTab === 'word-length') {
       fetchWordLengthData();
+    } else if (activeTab === 'reasoning') {
+      fetchReasoningData();
     }
   }, [activeTab]);
 
@@ -43,6 +46,20 @@ function App() {
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to fetch word length data');
       console.error('Error fetching word length analysis:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchReasoningData = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get(`${API_BASE}/analysis/reasoning-cost`);
+      setReasoningData(response.data);
+      setError(null);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to fetch reasoning data');
+      console.error('Error fetching reasoning analysis:', err);
     } finally {
       setLoading(false);
     }
@@ -322,6 +339,163 @@ function App() {
     );
   };
 
+  // Reasoning Analysis Components
+  const renderReasoningCorrelation = () => {
+    if (!reasoningData || !reasoningData.models || reasoningData.models.length === 0) {
+      return (
+        <div className="comparison-card">
+          <h3>Korelacja: Trudność pytania vs Koszt reasoningu</h3>
+          <p>Brak modeli reasoning w danych lub brak danych o tokenach myślenia.</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="comparison-card">
+        <h3>Korelacja: Trudność pytania vs Koszt reasoningu</h3>
+        <div className="comparison-stats">
+          {reasoningData.models.map((model, idx) => (
+            <div key={model.modelName} className="stat-box">
+              <h4>{model.modelName}</h4>
+              <p className="stat-value">
+                {model.correlation.toFixed(3)}
+                {model.correlation > 0.5 && <span className="correlation-indicator positive">↑</span>}
+                {model.correlation < -0.5 && <span className="correlation-indicator negative">↓</span>}
+                {Math.abs(model.correlation) <= 0.5 && <span className="correlation-indicator neutral">→</span>}
+              </p>
+              <p className="stat-label">Korelacja Pearsona</p>
+              <p className="stat-models">
+                {model.correlation > 0.3 && 'Pozytywna - więcej myślenia na trudniejszych pytaniach'}
+                {model.correlation < -0.3 && 'Negatywna - więcej myślenia na łatwych pytaniach'}
+                {Math.abs(model.correlation) <= 0.3 && 'Słaba - brak wyraźnej zależności'}
+              </p>
+            </div>
+          ))}
+        </div>
+        <p className="info-text">
+          Korelacja bliska 1.0 oznacza, że model zużywa więcej tokenów myślenia na trudniejsze pytania.
+          Korelacja bliska 0 oznacza brak zależności. Ujemna korelacja może wskazywać na "prze-myślanie" łatwych pytań.
+        </p>
+      </div>
+    );
+  };
+
+  const renderTrivialQuestionsAnalysis = () => {
+    if (!reasoningData || !reasoningData.models || reasoningData.models.length === 0) {
+      return null;
+    }
+
+    return (
+      <div className="comparison-card">
+        <h3>Analiza "prze-myślania" na trywialnych pytaniach</h3>
+        <p className="subtitle">Pytania rozwiązane od razu (0 podpowiedzi)</p>
+
+        <div className="comparison-stats">
+          {reasoningData.models.map((model, idx) => (
+            <div key={model.modelName} className="stat-box">
+              <h4>{model.modelName}</h4>
+              <p className="stat-value">
+                {model.avgTrivialReasoningTokens > 0 ? model.avgTrivialReasoningTokens.toFixed(0) : 'N/A'}
+              </p>
+              <p className="stat-label">Średnie tokeny myślenia</p>
+              <p className="stat-models">
+                {model.trivialQuestionCount} pytań trywialnych z {model.totalQuestions} wszystkich
+              </p>
+            </div>
+          ))}
+        </div>
+
+        <div className="chart-container">
+          <h4>Średnia liczba tokenów myślenia na pytaniach trywialnych</h4>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={reasoningData.models.map(m => ({
+              name: m.modelName,
+              tokens: m.avgTrivialReasoningTokens
+            }))}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="name" angle={-15} textAnchor="end" height={100} />
+              <YAxis label={{ value: 'Tokeny myślenia', angle: -90, position: 'insideLeft' }} />
+              <Tooltip formatter={(value) => value.toFixed(0)} />
+              <Bar dataKey="tokens" fill="#ff7300" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    );
+  };
+
+  const renderScatterPlot = () => {
+    if (!reasoningData || !reasoningData.models || reasoningData.models.length === 0) {
+      return null;
+    }
+
+    // Combine all reasoning data with model identifier
+    const allData = [];
+    reasoningData.models.forEach((model, idx) => {
+      model.reasoningData.forEach(point => {
+        allData.push({
+          ...point,
+          model: model.modelName,
+          color: getModelColors()[idx % getModelColors().length]
+        });
+      });
+    });
+
+    return (
+      <div className="chart-container">
+        <h2>Wykres rozrzutu: Trudność vs Tokeny myślenia</h2>
+        <ResponsiveContainer width="100%" height={500}>
+          <ScatterChart data={allData}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis
+              dataKey="difficulty"
+              type="number"
+              label={{ value: 'Trudność pytania (średnia liczba podpowiedzi)', position: 'insideBottom', offset: -5 }}
+              domain={[0, 'dataMax + 1']}
+            />
+            <YAxis
+              dataKey="avgReasoningTokens"
+              type="number"
+              label={{ value: 'Tokeny myślenia', angle: -90, position: 'insideLeft' }}
+              domain={[0, 'dataMax + 100']}
+            />
+            <Tooltip
+              formatter={(value, name) => [name === 'difficulty' ? value.toFixed(2) : value.toFixed(0), name === 'difficulty' ? 'Trudność' : 'Tokeny myślenia']}
+              content={({ active, payload }) => {
+                if (active && payload && payload.length) {
+                  const data = payload[0].payload;
+                  return (
+                    <div className="custom-tooltip">
+                      <p><strong>{data.model}</strong></p>
+                      <p>Pytanie: {data.question.substring(0, 50)}...</p>
+                      <p>Trudność: {data.difficulty.toFixed(2)}</p>
+                      <p>Tokeny myślenia: {data.avgReasoningTokens.toFixed(0)}</p>
+                      <p>Podpowiedzi: {data.hintsRequired}</p>
+                    </div>
+                  );
+                }
+                return null;
+              }}
+            />
+            <Legend />
+            {reasoningData.models.map((model, idx) => (
+              <Scatter
+                key={model.modelName}
+                name={model.modelName}
+                data={model.reasoningData}
+                fill={getModelColors()[idx % getModelColors().length]}
+              />
+            ))}
+          </ScatterChart>
+        </ResponsiveContainer>
+        <p className="info-text">
+          Każdy punkt reprezentuje jedno pytanie. Poziomo: trudność pytania. Pionowo: tokeny myślenia.
+          Modele, które efektywnie wykorzystują reasoning, powinny pokazywać pozytywną korelację.
+        </p>
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div className="App">
@@ -339,7 +513,11 @@ function App() {
         <div className="error-container">
           <h2>Błąd</h2>
           <p>{error}</p>
-          <button onClick={() => activeTab === 'semantic' ? fetchAnalysisData() : fetchWordLengthData()} className="retry-button">
+          <button onClick={() => {
+            if (activeTab === 'semantic') fetchAnalysisData();
+            else if (activeTab === 'word-length') fetchWordLengthData();
+            else if (activeTab === 'reasoning') fetchReasoningData();
+          }} className="retry-button">
             Spróbuj ponownie
           </button>
           {error.includes('categorized') && (
@@ -372,6 +550,12 @@ function App() {
             onClick={() => setActiveTab('word-length')}
           >
             Punkt 2: Długość słowa
+          </button>
+          <button
+            className={`tab-button ${activeTab === 'reasoning' ? 'active' : ''}`}
+            onClick={() => setActiveTab('reasoning')}
+          >
+            Punkt 3: Koszt reasoningu
           </button>
         </div>
       </header>
@@ -448,6 +632,19 @@ function App() {
 
             {/* Word Length Distribution */}
             {renderWordLengthStats()}
+          </>
+        )}
+
+        {activeTab === 'reasoning' && reasoningData && (
+          <>
+            {/* Correlation Analysis */}
+            {renderReasoningCorrelation()}
+
+            {/* Trivial Questions Analysis */}
+            {renderTrivialQuestionsAnalysis()}
+
+            {/* Scatter Plot */}
+            {renderScatterPlot()}
           </>
         )}
       </main>

@@ -362,3 +362,57 @@ tr:hover td:first-child {
     font-size: 2rem;
   }
 }
+
+/* Correlation Indicators */
+.correlation-indicator {
+  display: inline-block;
+  margin-left: 0.5rem;
+  font-size: 1.5rem;
+  font-weight: bold;
+}
+
+.correlation-indicator.positive {
+  color: #2ecc71;
+}
+
+.correlation-indicator.negative {
+  color: #e74c3c;
+}
+
+.correlation-indicator.neutral {
+  color: #95a5a6;
+}
+
+/* Info Text */
+.info-text {
+  color: #666;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border-left: 4px solid #667eea;
+}
+
+/* Custom Tooltip */
+.custom-tooltip {
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  max-width: 300px;
+}
+
+.custom-tooltip strong {
+  color: #667eea;
+  font-size: 0.95rem;
+}
+
+.custom-tooltip p {
+  margin: 4px 0;
+  color: #333;
+}
