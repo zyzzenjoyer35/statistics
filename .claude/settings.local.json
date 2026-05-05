@@ -16,7 +16,9 @@
       "Bash(taskkill:*)",
       "Bash(curl -s http://localhost:5000/api/analysis/word-length)",
       "Bash(git commit:*)",
-      "Bash(curl -s http://localhost:5000/api/analysis/reasoning-cost)"
+      "Bash(curl -s http://localhost:5000/api/analysis/reasoning-cost)",
+      "Bash(curl -s http://localhost:5000/api/health)",
+      "Bash(curl -s http://localhost:5000/api/analysis/pareto-frontier)"
     ]
   }
 }

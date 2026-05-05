@@ -10,6 +10,7 @@ function App() {
   const [analysisData, setAnalysisData] = useState(null);
   const [wordLengthData, setWordLengthData] = useState(null);
   const [reasoningData, setReasoningData] = useState(null);
+  const [paretoData, setParetoData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -20,6 +21,8 @@ function App() {
       fetchWordLengthData();
     } else if (activeTab === 'reasoning') {
       fetchReasoningData();
+    } else if (activeTab === 'pareto') {
+      fetchParetoData();
     }
   }, [activeTab]);
 
@@ -60,6 +63,20 @@ function App() {
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to fetch reasoning data');
       console.error('Error fetching reasoning analysis:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchParetoData = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get(`${API_BASE}/analysis/pareto-frontier`);
+      setParetoData(response.data);
+      setError(null);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to fetch Pareto frontier data');
+      console.error('Error fetching Pareto analysis:', err);
     } finally {
       setLoading(false);
     }
@@ -496,6 +513,180 @@ function App() {
     );
   };
 
+  // Pareto Frontier Analysis Components
+  const renderParetoSummary = () => {
+    if (!paretoData) return null;
+
+    const { summary, cheapestAbove80, bestQualityPriceRatio } = paretoData;
+
+    return (
+      <div className="comparison-card">
+        <h3>Podsumowanie analizy Pareto</h3>
+        <div className="comparison-stats">
+          <div className="stat-box">
+            <h4>Wszystkie modele</h4>
+            <p className="stat-value">{summary.totalModels}</p>
+            <p className="stat-label">Analizowano modele</p>
+          </div>
+
+          <div className="stat-box highlight">
+            <h4>Optymalne Pareto</h4>
+            <p className="stat-value">{summary.paretoOptimalCount}</p>
+            <p className="stat-label">Niezdominowane modele</p>
+          </div>
+
+          <div className="stat-box">
+            <h4>Zdominowane</h4>
+            <p className="stat-value">{summary.dominatedCount}</p>
+            <p className="stat-label">Modele do usunięcia</p>
+          </div>
+        </div>
+
+        {cheapestAbove80 && (
+          <div className="info-box success">
+            <h4>💰 Najtańszy model z ≥80% dokładności:</h4>
+            <p><strong>{cheapestAbove80.modelName}</strong></p>
+            <p>Dokładność: {cheapestAbove80.accuracy.toFixed(1)}% | Koszt: ${cheapestAbove80.avgCostPerQuestion.toFixed(6)}/pytanie</p>
+          </div>
+        )}
+
+        {bestQualityPriceRatio && (
+          <div className="info-box info">
+            <h4>🏆 Najlepszy stosunek jakość/cena:</h4>
+            <p><strong>{bestQualityPriceRatio.modelName}</strong></p>
+            <p>{bestQualityPriceRatio.qualityPriceRatio.toFixed(0)} punktów dokładności na $1</p>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderParetoScatterPlot = () => {
+    if (!paretoData || !paretoData.models) return null;
+
+    const scatterData = paretoData.models.map(model => ({
+      ...model,
+      fill: model.isParetoOptimal ? '#2ecc71' : '#bdc3c7',
+      radius: model.isParetoOptimal ? 8 : 5,
+      opacity: model.isParetoOptimal ? 1 : 0.5
+    }));
+
+    return (
+      <div className="chart-container">
+        <h2>Granica Pareto: Koszt vs Dokładność</h2>
+        <div className="chart-legend">
+          <span className="legend-item">
+            <span className="legend-color" style={{ background: '#2ecc71' }}></span>
+            Optymalne Pareto (niezdominowane)
+          </span>
+          <span className="legend-item">
+            <span className="legend-color" style={{ background: '#bdc3c7' }}></span>
+            Zdominowane
+          </span>
+        </div>
+        <ResponsiveContainer width="100%" height={500}>
+          <ScatterChart data={scatterData}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis
+              dataKey="avgCostPerQuestion"
+              type="number"
+              label={{ value: 'Średni koszt na pytanie ($)', position: 'insideBottom', offset: -5 }}
+              domain={[0, 'dataMax * 1.1']}
+              tickFormatter={(value) => `$${value.toFixed(4)}`}
+            />
+            <YAxis
+              dataKey="accuracy"
+              type="number"
+              label={{ value: 'Dokładność (%)', angle: -90, position: 'insideLeft' }}
+              domain={[0, 100]}
+              tickFormatter={(value) => `${value}%`}
+            />
+            <Tooltip
+              formatter={(value, name) => {
+                if (name === 'avgCostPerQuestion') return [`$${value.toFixed(6)}`, 'Koszt'];
+                if (name === 'accuracy') return [`${value.toFixed(1)}%`, 'Dokładność'];
+                return [value, name];
+              }}
+              content={({ active, payload }) => {
+                if (active && payload && payload.length) {
+                  const data = payload[0].payload;
+                  return (
+                    <div className="custom-tooltip">
+                      <p><strong>{data.modelName}</strong></p>
+                      {data.isParetoOptimal && <p className="pareto-badge">✓ Optymalne Pareto</p>}
+                      {data.isCheapestAbove80 && <p className="special-badge">💰 Najtańszy ≥80%</p>}
+                      {data.isBestQualityPriceRatio && <p className="special-badge">🏆 Najlepszy stosunek jakość/cena</p>}
+                      <p>Dokładność: {data.accuracy.toFixed(1)}%</p>
+                      <p>Koszt: ${data.avgCostPerQuestion.toFixed(6)}/pytanie</p>
+                      <p>Stosunek jakość/cena: {data.qualityPriceRatio.toFixed(0)} pkt/$</p>
+                      <p>Poprawne: {data.correctCount}/{data.totalCount}</p>
+                    </div>
+                  );
+                }
+                return null;
+              }}
+            />
+            <Scatter data={scatterData}>
+              {scatterData.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={entry.fill} />
+              ))}
+            </Scatter>
+          </ScatterChart>
+        </ResponsiveContainer>
+        <p className="info-text">
+          <strong>Granica Pareto</strong> to zbiór modeli, dla których nie istnieje model jednocześnie tańszy i dokładniejszy.
+          Modele na granicy Pareto (zielone) oferują optymalny kompromis między kosztem a jakością.
+          Modele zdominowane (szare) są praktycznie "zbędne" - można je zastąpić lepszymi opcjami.
+        </p>
+      </div>
+    );
+  };
+
+  const renderParetoTable = () => {
+    if (!paretoData || !paretoData.models) return null;
+
+    return (
+      <div className="table-container">
+        <h3>Szczegółowa tabela modeli</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Model</th>
+              <th>Dokładność</th>
+              <th>Koszt/pytanie</th>
+              <th>Jakość/cena</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {paretoData.models
+              .sort((a, b) => b.qualityPriceRatio - a.qualityPriceRatio)
+              .map((model, idx) => (
+                <tr key={model.modelName} className={model.isParetoOptimal ? 'pareto-optimal-row' : ''}>
+                  <td className="model-name">
+                    {model.modelName}
+                    {model.isParetoOptimal && <span className="badge pareto">Pareto</span>}
+                    {model.isCheapestAbove80 && <span className="badge cheapest">💰</span>}
+                    {model.isBestQualityPriceRatio && <span className="badge best-ratio">🏆</span>}
+                  </td>
+                  <td>{model.accuracy.toFixed(1)}%</td>
+                  <td>${model.avgCostPerQuestion.toFixed(6)}</td>
+                  <td>{model.qualityPriceRatio.toFixed(0)}</td>
+                  <td>
+                    {model.isParetoOptimal ? (
+                      <span className="status-optimal">Optymalne</span>
+                    ) : (
+                      <span className="status-dominated">Zdominowane</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div className="App">
@@ -517,6 +708,7 @@ function App() {
             if (activeTab === 'semantic') fetchAnalysisData();
             else if (activeTab === 'word-length') fetchWordLengthData();
             else if (activeTab === 'reasoning') fetchReasoningData();
+            else if (activeTab === 'pareto') fetchParetoData();
           }} className="retry-button">
             Spróbuj ponownie
           </button>
@@ -556,6 +748,12 @@ function App() {
             onClick={() => setActiveTab('reasoning')}
           >
             Punkt 3: Koszt reasoningu
+          </button>
+          <button
+            className={`tab-button ${activeTab === 'pareto' ? 'active' : ''}`}
+            onClick={() => setActiveTab('pareto')}
+          >
+            Punkt 4: Granica Pareto
           </button>
         </div>
       </header>
@@ -645,6 +843,19 @@ function App() {
 
             {/* Scatter Plot */}
             {renderScatterPlot()}
+          </>
+        )}
+
+        {activeTab === 'pareto' && paretoData && (
+          <>
+            {/* Summary */}
+            {renderParetoSummary()}
+
+            {/* Scatter Plot */}
+            {renderParetoScatterPlot()}
+
+            {/* Detailed Table */}
+            {renderParetoTable()}
           </>
         )}
       </main>

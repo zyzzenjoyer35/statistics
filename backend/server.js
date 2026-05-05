@@ -533,6 +533,115 @@ function calculatePearsonCorrelation(x, y) {
     return numerator / denominator;
 }
 
+// API: Pareto frontier analysis
+app.get('/api/analysis/pareto-frontier', (req, res) => {
+    try {
+        // Load all log files
+        const logFiles = getLogFiles();
+        if (logFiles.length === 0) {
+            return res.status(404).json({ error: 'No log files found in logs/ directory' });
+        }
+
+        // Calculate accuracy and cost for each model
+        const modelData = [];
+
+        logFiles.forEach(logFile => {
+            const logData = readJsonFile(logFile);
+            if (!logData || logData.length === 0) return;
+
+            const filename = path.basename(logFile);
+            const modelName = parseModelName(filename);
+            const fullModelName = `openrouter/${modelName}`;
+
+            let correctCount = 0;
+            let totalCount = 0;
+            let totalCost = 0;
+            let totalQuestions = 0;
+
+            logData.forEach(logEntry => {
+                totalCount++;
+                if (logEntry.guessed) {
+                    correctCount++;
+                }
+
+                // Calculate total cost from all attempts
+                if (logEntry.attempts && logEntry.attempts.length > 0) {
+                    logEntry.attempts.forEach(attempt => {
+                        const usage = attempt.usage || {};
+                        const cost = usage.cost || 0;
+                        totalCost += cost;
+                    });
+                }
+            });
+
+            const accuracy = totalCount > 0 ? (correctCount / totalCount) * 100 : 0;
+            const avgCostPerQuestion = totalCount > 0 ? totalCost / totalCount : 0;
+            const qualityPriceRatio = avgCostPerQuestion > 0 ? accuracy / avgCostPerQuestion : 0;
+
+            modelData.push({
+                modelName,
+                fullName: fullModelName,
+                accuracy,
+                avgCostPerQuestion,
+                qualityPriceRatio,
+                totalCost,
+                correctCount,
+                totalCount
+            });
+        });
+
+        // Identify Pareto-optimal models
+        // A model is Pareto-optimal if no other model is both cheaper AND more accurate
+        const paretoOptimalModels = modelData.filter(model => {
+            return !modelData.some(other =>
+                other.modelName !== model.modelName &&
+                other.avgCostPerQuestion <= model.avgCostPerQuestion &&
+                other.accuracy >= model.accuracy &&
+                (other.avgCostPerQuestion < model.avgCostPerQuestion || other.accuracy > model.accuracy)
+            );
+        });
+
+        const paretoModelNames = new Set(paretoOptimalModels.map(m => m.modelName));
+
+        // Find cheapest model with ≥80% accuracy
+        const modelsAbove80 = modelData.filter(m => m.accuracy >= 80);
+        const cheapestAbove80 = modelsAbove80.length > 0 ?
+            modelsAbove80.reduce((cheapest, current) =>
+                current.avgCostPerQuestion < cheapest.avgCostPerQuestion ? current : cheapest
+            ) : null;
+
+        // Find best quality/price ratio
+        const bestQualityPriceRatio = modelData.length > 0 ?
+            modelData.reduce((best, current) =>
+                current.qualityPriceRatio > best.qualityPriceRatio ? current : best
+            ) : null;
+
+        // Mark models as Pareto-optimal or dominated
+        const enrichedModelData = modelData.map(model => ({
+            ...model,
+            isParetoOptimal: paretoModelNames.has(model.modelName),
+            isCheapestAbove80: cheapestAbove80 && model.modelName === cheapestAbove80.modelName,
+            isBestQualityPriceRatio: bestQualityPriceRatio && model.modelName === bestQualityPriceRatio.modelName
+        }));
+
+        res.json({
+            models: enrichedModelData,
+            paretoOptimalModels: paretoOptimalModels,
+            cheapestAbove80,
+            bestQualityPriceRatio,
+            summary: {
+                totalModels: modelData.length,
+                paretoOptimalCount: paretoOptimalModels.length,
+                dominatedCount: modelData.length - paretoOptimalModels.length
+            }
+        });
+
+    } catch (error) {
+        console.error('Error in Pareto frontier analysis:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // API: Health check
 app.get('/api/health', (req, res) => {
     res.json({
@@ -553,4 +662,5 @@ app.listen(PORT, () => {
     console.log(`  GET /api/analysis/semantic-taxonomy`);
     console.log(`  GET /api/analysis/word-length`);
     console.log(`  GET /api/analysis/reasoning-cost`);
+    console.log(`  GET /api/analysis/pareto-frontier`);
 });
