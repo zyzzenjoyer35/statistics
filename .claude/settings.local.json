@@ -9,7 +9,12 @@
       "Bash(curl http://localhost:5000/api/health)",
       "Bash(curl -s http://localhost:5000/api/analysis/semantic-taxonomy)",
       "Bash(git add:*)",
-      "Bash(git commit -m 'Add React + Node.js dashboard for semantic taxonomy analysis \\(Point 1\\):*)"
+      "Bash(git commit -m 'Add React + Node.js dashboard for semantic taxonomy analysis \\(Point 1\\):*)",
+      "Bash(git commit -m 'Fix ESLint warning: remove unused selectedCategory state:*)",
+      "Bash(netstat -ano)",
+      "Bash(findstr :5000)",
+      "Bash(taskkill:*)",
+      "Bash(curl -s http://localhost:5000/api/analysis/word-length)"
     ]
   }
 }

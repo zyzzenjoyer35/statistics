@@ -221,6 +221,172 @@ app.get('/api/analysis/semantic-taxonomy', (req, res) => {
     }
 });
 
+// API: Word length analysis
+app.get('/api/analysis/word-length', (req, res) => {
+    try {
+        // Load dataset to get word lengths
+        const dataset = readJsonFile(DATASET_PATH);
+        if (!dataset) {
+            return res.status(404).json({ error: 'Dataset not found' });
+        }
+
+        // Load all log files
+        const logFiles = getLogFiles();
+        if (logFiles.length === 0) {
+            return res.status(404).json({ error: 'No log files found in logs/ directory' });
+        }
+
+        // Create question length mapping
+        const questionLengths = {};
+        dataset.forEach(item => {
+            questionLengths[item.pytanie] = {
+                length: item.liter,
+                answer: item.odpowiedz
+            };
+        });
+
+        // Define length groups: 3, 4, 5, 6, 7+
+        const lengthGroups = [3, 4, 5, 6, 7];
+
+        // Initialize results structure
+        const results = {
+            models: [],
+            lengthGroups: lengthGroups.map(l => l === 7 ? '7+' : l.toString()),
+            accuracyByLength: {},
+            wrongLengthByLength: {},
+            avgHintsByLength: {},
+            lengthDistribution: {}
+        };
+
+        // Calculate length distribution from dataset
+        lengthGroups.forEach(len => {
+            results.lengthDistribution[len] = 0;
+        });
+        dataset.forEach(item => {
+            const len = item.liter >= 7 ? 7 : item.liter;
+            if (lengthGroups.includes(len)) {
+                results.lengthDistribution[len]++;
+            }
+        });
+
+        // Process each model's log
+        const modelData = [];
+
+        logFiles.forEach(logFile => {
+            const logData = readJsonFile(logFile);
+            if (!logData || logData.length === 0) return;
+
+            const filename = path.basename(logFile);
+            const modelName = parseModelName(filename);
+            const fullModelName = `openrouter/${modelName}`;
+
+            // Initialize data for each length group
+            const lengthPerformance = {};
+            lengthGroups.forEach(len => {
+                lengthPerformance[len] = {
+                    total: 0,
+                    correct: 0,
+                    wrongLength: 0,
+                    totalHints: 0,
+                    guessedCount: 0
+                };
+            });
+
+            // Analyze each question in the log
+            logData.forEach(logEntry => {
+                const question = logEntry.question;
+
+                // Get the word length for this question
+                const qInfo = questionLengths[question];
+                if (!qInfo) return;
+
+                const length = qInfo.length >= 7 ? 7 : qInfo.length;
+                if (!lengthGroups.includes(length)) return;
+
+                lengthPerformance[length].total++;
+
+                // Check if model guessed correctly
+                if (logEntry.guessed) {
+                    lengthPerformance[length].correct++;
+                    lengthPerformance[length].totalHints += (logEntry.required_hints || 0);
+                    lengthPerformance[length].guessedCount++;
+                }
+
+                // Check attempts for wrong-length answers
+                if (logEntry.attempts && logEntry.attempts.length > 0) {
+                    logEntry.attempts.forEach(attempt => {
+                        const cleanedAnswer = attempt.cleaned_answer || '';
+                        if (cleanedAnswer.length !== qInfo.length) {
+                            lengthPerformance[length].wrongLength++;
+                        }
+                    });
+                }
+            });
+
+            // Calculate metrics for each length
+            const accuracies = {};
+            const wrongLengthPercent = {};
+            const avgHints = {};
+
+            lengthGroups.forEach(len => {
+                const perf = lengthPerformance[len];
+
+                // Accuracy: correct / total
+                accuracies[len] = perf.total > 0 ? (perf.correct / perf.total) * 100 : 0;
+
+                // Wrong length percentage: wrongLength / totalAttempts
+                const totalAttempts = perf.total * (perf.guessedCount > 0 ?
+                    (perf.totalHints / perf.guessedCount || 1) : 1);
+                wrongLengthPercent[len] = totalAttempts > 0 ? (perf.wrongLength / totalAttempts) * 100 : 0;
+
+                // Average hints: totalHints / guessedCount
+                avgHints[len] = perf.guessedCount > 0 ? perf.totalHints / perf.guessedCount : 0;
+            });
+
+            modelData.push({
+                modelName,
+                fullName: fullModelName,
+                accuracies,
+                wrongLengthPercent,
+                avgHints,
+                lengthPerformance
+            });
+        });
+
+        // Organize results for frontend
+        results.models = modelData.map(m => ({
+            name: m.modelName,
+            fullName: m.fullName,
+            accuracies: m.accuracies,
+            wrongLengthPercent: m.wrongLengthPercent,
+            avgHints: m.avgHints
+        }));
+
+        // Build data arrays for charts
+        lengthGroups.forEach(len => {
+            const label = len === 7 ? '7+' : len.toString();
+            results.accuracyByLength[label] = modelData.map(m => ({
+                model: m.modelName,
+                accuracy: m.accuracies[len]
+            }));
+            results.wrongLengthByLength[label] = modelData.map(m => ({
+                model: m.modelName,
+                wrongLengthPercent: m.wrongLengthPercent[len]
+            }));
+            results.avgHintsByLength[label] = modelData.map(m => ({
+                model: m.modelName,
+                avgHints: m.avgHints[len]
+            }));
+        });
+
+        res.json(results);
+
+    } catch (error) {
+        console.error('Error in word length analysis:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // API: Health check
 app.get('/api/health', (req, res) => {
     res.json({
@@ -239,4 +405,5 @@ app.listen(PORT, () => {
     console.log(`  GET /api/health`);
     console.log(`  GET /api/questions`);
     console.log(`  GET /api/analysis/semantic-taxonomy`);
+    console.log(`  GET /api/analysis/word-length`);
 });
