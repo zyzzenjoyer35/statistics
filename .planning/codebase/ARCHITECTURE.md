@@ -1,153 +1,124 @@
 # Architecture
 
-**Analysis Date:** 2026-05-05
+**Analysis Date:** 2026-05-09
 
 ## Pattern Overview
 
-**Overall:** Batch Processing Evaluator with Progressive Hinting Strategy
+**Overall:** Client-server architecture with data-driven analysis
 
 **Key Characteristics:**
-- Sequential evaluation of multiple LLM models against a fixed test dataset
-- Progressive hinting mechanism: models receive increasingly revealed letters as prompts
-- Resumable execution with per-model checkpointing and caching
-- Multi-format output generation (CSV, JSON) for analysis
-- Retry mechanism with exponential backoff for API reliability
+- Separated frontend and backend components
+- RESTful API for data communication
+- File-based data storage (JSON)
+- Component-based React frontend
+- Data analysis and aggregation patterns
 
 ## Layers
 
-**Configuration Layer:**
-- Purpose: Define models, prompts, and test parameters
-- Location: `crossword_tester.py` (lines 16-52)
-- Contains: Model list, system prompt, retry decorators
-- Depends on: Environment variables (`.env`)
-- Used by: Main processing loop
+**Backend Layer:**
+- Purpose: API server and data processing
+- Location: `backend/server.js`
+- Contains: Express.js application, API endpoints, data analysis logic
+- Depends on: Node.js runtime, Express, CORS
+- Used by: Frontend client applications
 
-**Data Access Layer:**
-- Purpose: Load test data and manage cached results
-- Location: `crossword_tester.py` (lines 33-36, 118-123)
-- Contains: `load_data()`, `load_existing_log()`, `model_log_path()`
-- Depends on: Filesystem (JSON files)
-- Used by: Main processing loop
+**Frontend Layer:**
+- Purpose: User interface and data visualization
+- Location: `frontend/src/`
+- Contains: React components, charts, user interactions
+- Depends on: React, Recharts, Axios
+- Used by: Web browsers
 
-**LLM Interaction Layer:**
-- Purpose: Execute API calls to language models
-- Location: `crossword_tester.py` (lines 54-103)
-- Contains: `call_llm()` with retry logic, prompt construction
-- Depends on: `litellm` library, external LLM APIs
-- Used by: Main processing loop
+**Data Layer:**
+- Purpose: Data storage and persistence
+- Location: Root directory (`dataset.json`, `categorized_dataset.json`, `classified_errors.json`)
+- Contains: Raw datasets, categorized data, error classifications
+- Depends on: File system, JSON format
+- Used by: Backend analysis functions
 
-**Hint Generation Layer:**
-- Purpose: Create progressively revealed letter masks
-- Location: `crossword_tester.py` (lines 105-112)
-- Contains: `generate_mask()` function
-- Depends on: Correct answer string
-- Used by: Main processing loop
-
-**Answer Validation Layer:**
-- Purpose: Clean and compare model responses against expected answers
-- Location: `crossword_tester.py` (lines 38-43)
-- Contains: `clean_answer()` function
-- Depends on: Regular expressions
-- Used by: Main processing loop
-
-**Execution Orchestration Layer:**
-- Purpose: Coordinate the entire evaluation workflow
-- Location: `crossword_tester.py` (lines 125-269)
-- Contains: `process_crosswords()` main function
-- Depends on: All other layers
-- Used by: CLI entry point (`__main__`)
-
-**Output Generation Layer:**
-- Purpose: Produce analysis results in multiple formats
-- Location: `crossword_tester.py` (lines 239-268)
-- Contains: CSV generation, pivot tables, summary statistics
-- Depends on: `pandas` library
-- Used by: Execution orchestration layer
+**Analysis Layer:**
+- Purpose: Multi-dimensional analysis of model performance
+- Location: `backend/server.js` analysis endpoints
+- Contains: Semantic taxonomy, word length, reasoning cost, Pareto frontier, error mode analyses
+- Depends on: Backend data layer, statistical calculations
+- Used by: Frontend visualization components
 
 ## Data Flow
 
-**Main Evaluation Flow:**
+**API Request Flow:**
 
-1. **Initialization**: Load dataset from `dataset.json`, create `logs/` directory, load cached results for each model
-2. **Question Loop**: Iterate through each question in the dataset
-3. **Model Loop**: For each question, evaluate all configured models
-4. **Cache Check**: Skip already-evaluated (model, question) pairs, use cached results
-5. **Hint Loop**: For new evaluations, attempt with 0, 1, 2... N hints where N = answer length
-6. **LLM Call**: Construct prompt with current mask, call LLM API
-7. **Answer Validation**: Clean response, check against correct answer
-8. **Failure Tracking**: Record incorrect answers to include in subsequent prompts as "wrong answers"
-9. **Success/Bail**: Stop hint loop on correct answer or after exhausting all hints
-10. **Log Persistence**: Immediately write results to per-model JSON log file
-11. **Aggregation**: After all evaluations, compile results into CSV format
-12. **Summary**: Calculate and display accuracy, cost, and token usage statistics
+1. User requests analysis via frontend
+2. Frontend makes HTTP request to backend API
+3. Backend reads relevant data files
+4. Backend performs analysis calculations
+5. Backend returns structured JSON response
+6. Frontend processes and visualizes data
+
+**Data Processing Flow:**
+
+1. **Data Loading:** `readJsonFile()` helper loads JSON data
+2. **Analysis Processing:** Multiple analysis functions transform raw data
+3. **Aggregation:** Results are aggregated by model and categories
+4. **Response Structuring:** Analysis results formatted for frontend consumption
 
 **State Management:**
-- Resumable: Per-model JSON logs allow interrupted runs to continue from last checkpoint
-- Cached results: Avoid re-evaluating (model, question) pairs already completed
-- Immediate persistence: Each model-question result is written to disk before proceeding
-- No in-memory state beyond current question/model being processed
+- Frontend uses React local state for active tab and data caching
+- Backend is stateless, processes data on each request
 
 ## Key Abstractions
 
-**Question-Answer Pair:**
-- Purpose: Represents a single crossword clue
-- Examples: `dataset.json` entries with `pytanie`, `liter`, `odpowiedz` fields
-- Pattern: JSON array of objects with Polish language content
+**API Endpoint Abstractions:**
+- Purpose: Define analysis operations
+- Examples: `/api/analysis/semantic-taxonomy`, `/api/analysis/word-length`
+- Pattern: RESTful GET endpoints with query parameters
 
-**Model Configuration:**
-- Purpose: Defines which LLMs to evaluate
-- Examples: `MODELS_TO_TEST` list in `crossword_tester.py` (line 16)
-- Pattern: List of OpenRouter model identifiers (e.g., `openrouter/anthropic/claude-sonnet-4.6`)
+**Data Model Abstractions:**
+- Purpose: Represent question and model data structures
+- Examples: Question objects with `pytanie`, `odpowiedz`, `liter`, `category`
+- Pattern: Consistent JSON structure across all data files
 
-**Hint Strategy:**
-- Purpose: Progressive letter revelation to guide model toward correct answer
-- Examples: Mask generation in `generate_mask()` function
-- Pattern: Left-to-right prefix revelation (first N letters shown, rest as underscores)
-
-**Attempt Record:**
-- Purpose: Captures single LLM call with full context
-- Examples: Entries in `logs/{model}.json` files with `attempts` arrays
-- Pattern: Structured record including prompt, response, usage metrics, timing, and reasoning content
-
-**Evaluation Result:**
-- Purpose: Summarizes model performance on a single question
-- Examples: Rows in `results.csv` and `results_details.csv`
-- Pattern: Boolean success flag, required hints count, model ID, question text
+**Analysis Result Abstraction:**
+- Purpose: Standardize analysis output format
+- Examples: Accuracy percentages, cost metrics, correlation coefficients
+- Pattern: Structured objects with model arrays and summary statistics
 
 ## Entry Points
 
-**Main Script Execution:**
-- Location: `crossword_tester.py` (line 270-271)
-- Triggers: Running `python crossword_tester.py` from command line
-- Responsibilities: Invokes `process_crosswords()` with default dataset, model list, and output paths
+**Backend Entry Point:**
+- Location: `backend/server.js`
+- Triggers: HTTP requests on port 5000
+- Responsibilities: API routing, data analysis, error handling
+- Functions: Express app initialization, middleware setup, route definitions
 
-**Imported Function Calls:**
-- Location: `crossword_tester.py` (line 125, `process_crosswords()` function)
-- Triggers: Programmatic use from other Python modules
-- Responsibilities: Executes full evaluation workflow with customizable parameters
+**Frontend Entry Point:**
+- Location: `frontend/src/index.js`
+- Triggers: React DOM rendering
+- Responsibilities: App initialization, root component mounting
+- Functions: React StrictMode wrapping, root DOM element targeting
+
+**Frontend Main Component:**
+- Location: `frontend/src/App.js`
+- Triggers: User navigation and data fetching
+- Responsibilities: Tab management, API calls, component rendering
+- Functions: Data fetching hooks, chart rendering, state management
 
 ## Error Handling
 
-**Strategy:** Retry with exponential backoff for transient failures, graceful degradation for permanent failures
+**Strategy:** Comprehensive error handling with user-friendly messages
 
 **Patterns:**
-- **API Retries**: `@retry` decorator (line 54) with exponential backoff (1-5 seconds) and 3 max attempts for LLM calls
-- **Question Skipping**: On exception during LLM call, log error, mark question as skipped for that model, continue with next model
-- **Cache Loading**: If log file doesn't exist, return empty list rather than failing
-- **Directory Creation**: Use `os.makedirs(..., exist_ok=True)` to avoid race conditions
+- Try-catch blocks for file operations
+- HTTP status codes for API responses
+- Graceful degradation when data is missing
+- Retry functionality for failed API calls
 
 ## Cross-Cutting Concerns
 
-**Logging:** Console output with bracketed prefixes (`[OK]`, `[MISS]`, `[ERROR]`, `[SKIP]`) for status tracking
-
-**Validation:** String normalization via `clean_answer()` removes punctuation, whitespace, and converts to uppercase for consistent comparison
-
-**Authentication:** Environment-based API key loading via `dotenv` from `.env` and `.env.local` files
-
-**Cost Tracking:** Per-request cost aggregation from LiteLLM usage metadata, displayed in summary
-
-**Progress Indication:** Nested counters showing question number (X/Y) and model name for long-running evaluations
+**Logging:** Console logging for debugging and monitoring
+**Validation:** Input validation and file existence checks
+**Authentication:** None - open API access
+**Caching:** No persistent caching, data reprocessed on each request
 
 ---
 
-*Architecture analysis: 2026-05-05*
+*Architecture analysis: 2026-05-09*

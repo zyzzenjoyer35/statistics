@@ -1,69 +1,75 @@
 # Technology Stack
 
-**Analysis Date:** 2026-05-05
+**Analysis Date:** 2026-05-09
 
 ## Languages
 
 **Primary:**
-- Python 3.x - Core language for the entire application (`crossword_tester.py`)
-
-**Secondary:**
-- None detected
+- Python 3.x - Core testing and benchmarking logic (`crossword_tester.py`, `categorize_questions.py`, `categorize_errors.py`)
+- JavaScript/Node.js - Backend API server (`backend/server.js`)
+- TypeScript/React - Frontend dashboard (`frontend/src/`)
 
 ## Runtime
 
 **Environment:**
-- Python 3.x (specific version not locked)
+- Node.js (Express) - Backend runtime
+- Python 3.x - Core application logic
+- Browser - Frontend runtime
 
 **Package Manager:**
-- pip
-- Lockfile: Not present (only `requirements.txt` without pinned versions)
+- npm - JavaScript/Node.js dependencies
+- pip - Python dependencies
 
 ## Frameworks
 
 **Core:**
-- None (standalone Python script)
+- Express.js v4.18.2 - Backend web framework
+- React v18.2.0 - Frontend UI library
 
 **Testing:**
-- None (manual testing only)
+- No dedicated testing framework detected (core functionality is production code)
 
 **Build/Dev:**
-- None (no build system or bundling)
+- Create React App v5.0.1 - Frontend build tool
+- Nodemon v3.0.1 - Development server
 
 ## Key Dependencies
 
 **Critical:**
-- litellm - Unified API for multiple LLM providers (OpenRouter, Anthropic, Google, etc.)
-- pandas - Data manipulation and CSV export for benchmark results
-- tenacity - Retry logic with exponential backoff for API calls
+- litellm - Universal LLM interface for multiple providers
+- pandas - Data manipulation and CSV export
+- recharts - Data visualization charts for frontend
 
-**Utilities:**
-- python-dotenv - Environment variable loading from `.env` and `.env.local` files
+**Infrastructure:**
+- express - Web server and routing
+- cors - Cross-origin resource sharing
+- axios - HTTP client for frontend
+- dotenv - Environment variable management
 
 ## Configuration
 
 **Environment:**
-- Loaded from `.env.local` (override) then `.env` (fallback)
-- Key config: `OPENROUTER_API_KEY` (stored in `.env.local`, not committed)
-- Model list: Hardcoded in `crossword_tester.py` (lines 16-31)
+- `.env` file for API keys (exists but contents not read)
+- Environment variables loaded via `dotenv`
 
 **Build:**
-- No build configuration files
-- Direct script execution: `python crossword_tester.py`
+- `backend/package.json` - Node.js dependencies
+- `frontend/package.json` - React dependencies
+- `requirements.txt` - Python dependencies
 
 ## Platform Requirements
 
 **Development:**
-- Python 3.x with pip
-- Internet connection for OpenRouter API calls
-- 10-second timeout per API call (hardcoded)
-- File system write permissions for `logs/` directory and output CSVs
+- Node.js (Express runtime)
+- Python 3.x
+- npm and pip package managers
 
 **Production:**
-- Same as development (script runs locally, no deployment target)
-- No server infrastructure required
-- Persistent storage for log files and results
+- Node.js server for backend
+- Static file server for frontend (React build)
+- Python runtime for core testing logic
 
 ---
 
-*Stack analysis: 2026-05-05*
+*Stack analysis: 2026-05-09*
+```
