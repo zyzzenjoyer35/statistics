@@ -1,246 +1,255 @@
-# Codebase Concerns
+# Codebase Concerns and Technical Debt
 
-**Analysis Date:** 2026-05-05
+This document identifies technical debt, security concerns, performance issues, and fragile areas in the crossword analysis application.
+
+## Security Concerns
+
+### High Priority
+
+1. **No API Authentication** (`backend/server.js`)
+   - All API endpoints are publicly accessible without authentication
+   - Anyone can access analysis data and API health information
+   - No rate limiting to prevent abuse
+   - **Impact**: Data exposure, potential API abuse
+   - **Location**: All endpoints in `backend/server.js:56-787`
+
+2. **Unrestricted CORS** (`backend/server.js:10`)
+   - CORS enabled for all origins without restrictions
+   - Opens application to cross-origin attacks
+   - **Impact**: CSRF vulnerabilities, data theft
+   - **Location**: `backend/server.js:10`
+
+3. **Hardcoded Localhost URLs** (`frontend/src/App.js:6`)
+   - API base URL hardcoded to `http://localhost:5000/api`
+   - No environment-based configuration
+   - **Impact**: Cannot deploy to production, security risk
+   - **Location**: `frontend/src/App.js:6`
+
+4. **No Input Validation** (`backend/server.js`)
+   - API endpoints don't validate input parameters
+   - File paths not sanitized before filesystem access
+   - **Impact**: Path traversal attacks, injection vulnerabilities
+   - **Location**: Multiple endpoints throughout `backend/server.js`
+
+5. **No Security Headers** (`backend/server.js`)
+   - Missing security headers (CSP, X-Frame-Options, etc.)
+   - No HTTPS enforcement
+   - **Impact**: XSS, clickjacking vulnerabilities
+   - **Location**: Server configuration
+
+### Medium Priority
+
+6. **Environment Variable Exposure** (Python scripts)
+   - API keys loaded from `.env` files without validation
+   - Multiple `.env` sources loaded without safeguards
+   - **Impact**: Potential credential exposure
+   - **Location**: `categorize_questions.py:1-3`, `crossword_tester.py:1-3`
+
+## Performance Concerns
+
+### High Priority
+
+1. **Synchronous File Operations** (`backend/server.js:26`)
+   - `fs.readFileSync` blocks event loop
+   - Large JSON files read entirely into memory
+   - **Impact**: Server blocking, poor response times
+   - **Location**: `backend/server.js:26`
+
+2. **Large Single React Component** (`frontend/src/App.js`)
+   - 1000+ lines in single component
+   - No code splitting or lazy loading
+   - **Impact**: Slow initial load, poor performance
+   - **Location**: `frontend/src/App.js:1-1048`
+
+3. **No Response Caching** (`backend/server.js`)
+   - Analysis data recalculated on every request
+   - No caching of expensive computations
+   - **Impact**: High server load, slow responses
+   - **Location**: All analysis endpoints
+
+### Medium Priority
+
+4. **No Request Debouncing** (`frontend/src/App.js:18-30`)
+   - Multiple API calls triggered on tab changes
+   - No debouncing or cancellation
+   - **Impact**: Unnecessary API calls, wasted resources
+   - **Location**: `frontend/src/App.js:18-30`
+
+5. **Memory-Intensive Operations** (Python scripts)
+   - Large datasets loaded entirely into memory
+   - No streaming or chunked processing
+   - **Impact**: High memory usage, potential crashes
+   - **Location**: `crossword_tester.py:33-36`, `categorize_questions.py:27-29`
+
+## Error Handling Concerns
+
+1. **Basic Error Handling** (`backend/server.js`)
+   - Generic error responses without details
+   - No error classification or logging
+   - **Impact**: Difficult debugging, poor user experience
+   - **Location**: Multiple try-catch blocks
+
+2. **No React Error Boundaries** (`frontend/src/App.js`)
+   - Component errors can crash entire application
+   - No graceful degradation
+   - **Impact**: Poor user experience, lost data
+   - **Location**: Missing error boundaries
+
+3. **Limited Error Recovery** (Python scripts)
+   - Some operations fail silently
+   - No retry logic for transient failures
+   - **Impact**: Incomplete processing, data loss
+   - **Location**: `crossword_tester.py:166-172`
+
+## Code Quality Concerns
+
+1. **Monolithic Component** (`frontend/src/App.js`)
+   - Single component handles all functionality
+   - Mixed concerns (data fetching, rendering, state management)
+   - **Impact**: Hard to maintain, test, and extend
+   - **Location**: `frontend/src/App.js:1-1048`
+
+2. **Hardcoded Configuration** (Multiple files)
+   - Model names, timeouts, paths hardcoded
+   - No centralized configuration management
+   - **Impact**: Difficult to change, inflexible deployment
+   - **Location**: `crossword_tester.py:16-31`, `backend/server.js:7`
+
+3. **Mixed Language Codebase**
+   - Polish and English text mixed throughout
+   - Inconsistent variable naming conventions
+   - **Impact**: Confusing for developers, maintenance issues
+   - **Location**: Throughout codebase
+
+4. **No Type Checking**
+   - JavaScript/Python without type annotations
+   - No TypeScript or type hints
+   - **Impact**: Runtime errors, harder debugging
+   - **Location**: All source files
+
+5. **No API Documentation**
+   - No OpenAPI/Swagger documentation
+   - No inline parameter descriptions
+   - **Impact**: Difficult to integrate, unclear contracts
+   - **Location**: Missing API docs
 
 ## Technical Debt
 
-**Monolithic Script:**
-- Issue: Entire application (271 lines) is in a single file (`crossword_tester.py`) with no separation of concerns
-- Files: `crossword_tester.py`
-- Impact: Difficult to test, maintain, and extend. Adding features requires modifying one large file.
-- Fix approach: Split into modules: `models.py` (data structures), `llm_client.py` (API calls), `crossword_solver.py` (core logic), `data_loader.py` (dataset handling), `results_exporter.py` (CSV/JSON output)
+1. **No Database Layer**
+   - File-based storage instead of database
+   - No data validation or constraints
+   - **Impact**: Data corruption risks, scalability issues
+   - **Location**: File operations throughout codebase
 
-**Hard-coded Model List:**
-- Issue: Model names are hard-coded in `MODELS_TO_TEST` list at line 16-31
-- Files: `crossword_tester.py`
-- Impact: Requires code changes to add/remove models, no programmatic model management
-- Fix approach: Load models from configuration file or environment variables, create CLI argument for model selection
+2. **No Testing Framework**
+   - No unit tests, integration tests, or E2E tests
+   - No test coverage reporting
+   - **Impact**: High bug risk, fear of refactoring
+   - **Location**: Missing test suite
 
-**No Configuration Management:**
-- Issue: Parameters like timeouts, retry counts, temperature are scattered throughout code
-- Files: `crossword_tester.py` (lines 54, 70-71)
-- Impact: Difficult to adjust behavior without code changes
-- Fix approach: Create a `config.py` or use `pydantic-settings` for centralized configuration
+3. **No CI/CD Pipeline**
+   - Manual deployment process
+   - No automated testing or linting
+   - **Impact**: Deployment errors, slow iteration
+   - **Location**: Missing CI/CD configuration
 
-## Known Bugs
-
-**Silent Failure on API Errors:**
-- Symptoms: API errors are caught but only printed to console, then the test case is skipped
-- Files: `crossword_tester.py` (lines 166-172)
-- Trigger: Any exception from `call_llm()` (network timeouts, API failures, rate limits)
-- Workaround: None - data is lost
-- Impact: Incomplete results, no record of which questions failed and why
-
-**Race Condition in Log Files:**
-- Symptoms: Log files are written multiple times without proper locking
-- Files: `crossword_tester.py` (lines 230-236)
-- Trigger: Running multiple instances concurrently
-- Impact: Data corruption or loss if multiple processes write to same log file
-- Workaround: Run only one instance at a time
-
-**Incomplete Error Recovery:**
-- Symptoms: When `call_llm()` fails, the entire question-model combination is skipped permanently
-- Files: `crossword_tester.py` (lines 166-172, 209-210)
-- Trigger: Any exception during LLM call
-- Impact: No retry mechanism for transient failures, data loss
-- Workaround: Manually restart script after fixing underlying issue
-
-## Security Considerations
-
-**API Key Exposure Risk:**
-- Risk: API keys loaded from `.env` and `.env.local` but no validation they exist
-- Files: `crossword_tester.py` (lines 2-3)
-- Current mitigation: `.env.local` is in `.gitignore`
-- Recommendations:
-  - Add validation that required API keys are present before starting
-  - Use a secrets manager for production use
-  - Document which API keys are required
-
-**No Input Sanitization:**
-- Risk: Dataset JSON is loaded without validation
-- Files: `crossword_tester.py` (lines 33-36)
-- Current mitigation: None
-- Recommendations:
-  - Validate dataset structure before processing
-  - Sanitize question and answer strings to prevent injection attacks
-  - Add schema validation using `pydantic` or `jsonschema`
-
-**Unbounded External Data:**
-- Risk: LLM responses are processed without size limits
-- Files: `crossword_tester.py` (lines 82-83, 90-91)
-- Current mitigation: `max_tokens=1024` for OpenRouter models (line 75)
-- Recommendations:
-  - Add response size validation
-  - Truncate excessive responses
-  - Log warnings for abnormally long responses
-
-## Performance Bottlenecks
-
-**Synchronous Processing:**
-- Problem: All model calls are sequential, no parallel processing
-- Files: `crossword_tester.py` (lines 137-231)
-- Cause: Nested loops process models and questions one at a time
-- Improvement path: Use `asyncio` or `multiprocessing` to process models in parallel
-
-**Excessive JSON Serialization:**
-- Problem: Log files are rewritten after every question (lines 230-231) and again at the end (lines 234-236)
-- Files: `crossword_tester.py`
-- Cause: Append operation writes entire array each time
-- Improvement path: Use append-only JSONL format or write only at end of processing
-
-**Large Log Files:**
-- Problem: Logs directory is 1.2MB with 15 model logs, each containing full message history
-- Files: `logs/` directory
-- Cause: Every attempt stores full `messages` array (line 182)
-- Improvement path:
-  - Make message storage optional via flag
-  - Store only metadata for successful attempts
-  - Implement log rotation or compression
-
-**No Result Caching:**
-- Problem: Dataset.json is reloaded on every run, but no mechanism to skip already-completed tests
-- Files: `crossword_tester.py` (lines 142-154)
-- Cause: Caching only checks for exact question match, not parameters
-- Improvement path: Add hash-based cache key including model name and parameters
+4. **Manual Data Processing**
+   - Scripts require manual execution
+   - No automation or scheduling
+   - **Impact**: Human error, incomplete data
+   - **Location**: Python scripts
 
 ## Fragile Areas
 
-**String Matching:**
-- Files: `crossword_tester.py` (lines 199, 206)
-- Why fragile: Exact string comparison (`model_response == correct_answer`) rejects valid synonyms
-- Safe modification: Add fuzzy matching or LLM-based semantic validation
-- Test coverage: None - no test files exist in project
+1. **Concurrent File Writes** (Python scripts)
+   - Multiple processes can write to same files
+   - No file locking or atomic operations
+   - **Impact**: Data corruption, race conditions
+   - **Location**: `crossword_tester.py:230-231`, `235-236`
 
-**Polish Character Handling:**
-- Files: `crossword_tester.py` (line 41)
-- Why fragile: `clean_answer()` removes all non-alphanumeric characters, including Polish diacritics (ą, ć, ę, ł, ń, ó, ś, ź, ż)
-- Safe modification: Preserve Polish characters in the regex pattern
-- Test coverage: None - no validation that Polish characters are handled correctly
+2. **Network Dependencies** (All files)
+   - API calls without proper error handling
+   - No circuit breakers or timeouts
+   - **Impact**: Cascading failures, poor reliability
+   - **Location**: All LLM API calls
 
-**Model-Specific Logic:**
-- Files: `crossword_tester.py` (lines 74-76)
-- Why fragile: Hard-coded check for "openrouter/" prefix adds parameters only for those models
-- Safe modification: Create model configuration registry
-- Test coverage: None - no tests for different model providers
+3. **Schema Fragility** (JSON files)
+   - No schema validation for JSON files
+   - Breaking changes can cause crashes
+   - **Impact**: Data loss, application crashes
+   - **Location**: All JSON file operations
 
-**Data Structure Assumptions:**
-- Files: `crossword_tester.py` (lines 38-42, 138-140)
-- Why fragile: Assumes dataset has "pytanie", "odpowiedz", and "liter" fields
-- Safe modification: Add data validation with clear error messages
-- Test coverage: None - no schema validation
+4. **Large Dataset Processing**
+   - No streaming or pagination
+   - Memory exhaustion on large datasets
+   - **Impact**: Application crashes, data loss
+   - **Location**: `crossword_tester.py:137-237`
 
-## Scaling Limits
+## Recommendations
 
-**Memory Usage:**
-- Current capacity: All results stored in memory until end of processing
-- Limit: With large datasets and many models, could exceed available RAM
-- Scaling path: Stream results to disk incrementally, use generators
+### Immediate Actions (High Priority)
 
-**No Rate Limiting:**
-- Current capacity: Unlimited API calls, bounded only by retry logic
-- Limit: API providers will block excessive requests
-- Scaling path: Implement rate limiting with `tenacity` or custom backoff
+1. **Add API Authentication**
+   - Implement JWT or API key authentication
+   - Add rate limiting per user/IP
+   - Secure CORS configuration
 
-**Fixed Timeout:**
-- Current capacity: 10-second timeout for all models (line 71)
-- Limit: Insufficient for reasoning models or slow providers
-- Scaling path: Make timeout configurable per model or adaptive based on response size
+2. **Environment Configuration**
+   - Move hardcoded URLs to environment variables
+   - Create production-ready configuration
+   - Add validation for environment variables
 
-## Dependencies at Risk
+3. **Fix Synchronous Operations**
+   - Replace `fs.readFileSync` with async alternatives
+   - Add proper error handling for file operations
+   - Implement file locking for concurrent access
 
-**No Version Pinning:**
-- Risk: `requirements.txt` has no version numbers
-- Impact: `pip install -r requirements.txt` may install incompatible versions
-- Migration plan: Pin exact versions (e.g., `pandas==2.2.0`, `litellm==1.45.0`, `tenacity==8.2.3`)
+4. **Component Decomposition**
+   - Split large React component into smaller components
+   - Implement code splitting and lazy loading
+   - Add React error boundaries
 
-**Missing Development Dependencies:**
-- Risk: No testing framework, linter, or formatter specified
-- Impact: Code quality cannot be enforced or tested
-- Migration plan: Add `pytest`, `pytest-cov`, `ruff`, `mypy` to requirements
+### Medium-Term Improvements
 
-**LiteLLm Dependency:**
-- Risk: Heavy dependency for simple LLM calling
-- Impact: Large install size, potential API changes
-- Migration plan: Consider direct API clients for critical providers (OpenAI, Anthropic)
+1. **Add Caching Layer**
+   - Implement Redis or in-memory caching
+   - Cache expensive API responses
+   - Add cache invalidation strategy
 
-## Missing Critical Features
+2. **Database Migration**
+   - Replace file-based storage with database
+   - Implement data validation layer
+   - Add migration scripts for existing data
 
-**No Test Suite:**
-- Problem: Zero test files in project
-- Blocks: Confidence in refactoring, regression prevention
-- Impact: Bugs may be introduced without detection
-- Priority: High
+3. **Testing Infrastructure**
+   - Set up testing framework (Jest, Pytest)
+   - Add unit tests for critical functions
+   - Implement integration tests for API endpoints
 
-**No CLI Interface:**
-- Problem: Script must be modified to change parameters
-- Blocks: Non-technical users, automation
-- Impact: Poor usability, difficult to integrate into pipelines
-- Priority: Medium
+4. **API Documentation**
+   - Create OpenAPI/Swagger documentation
+   - Add type definitions for API contracts
+   - Implement request/response validation
 
-**No Progress Reporting:**
-- Problem: Only basic console output, no ETA or progress bars
-- Blocks: Long-running jobs monitoring
-- Impact: Difficult to estimate completion time
-- Priority: Low
+### Long-Term Architecture
 
-**No Result Comparison:**
-- Problem: No way to compare results between runs
-- Blocks: A/B testing, model evaluation over time
-- Impact: Hard to measure improvements or regressions
-- Priority: Medium
+1. **Microservices Architecture**
+   - Separate analysis services
+   - Implement message queue for async processing
+   - Add service discovery and load balancing
 
-## Test Coverage Gaps
+2. **Monitoring and Observability**
+   - Add application logging (structured logs)
+   - Implement metrics collection
+   - Set up alerting for failures
 
-**No Unit Tests:**
-- What's not tested: Every function in `crossword_tester.py`
-- Files: `crossword_tester.py`
-- Risk: Any code change could break functionality
-- Priority: High
-
-**No Integration Tests:**
-- What's not tested: Full workflow from dataset loading to CSV output
-- Files: Entire application
-- Risk: End-to-end functionality not validated
-- Priority: High
-
-**No Mock Tests:**
-- What's not tested: Error handling, API failures, edge cases
-- Files: `crossword_tester.py` (lines 166-172)
-- Risk: Error paths never exercised
-- Priority: Medium
-
-**No Data Validation Tests:**
-- What's not tested: Dataset schema, answer cleaning, mask generation
-- Files: `crossword_tester.py` (lines 38-42, 105-112)
-- Risk: Invalid data causes silent failures
-- Priority: Medium
-
-## Maintainability Issues
-
-**No Documentation:**
-- Issue: No docstrings, README, or inline comments explaining logic
-- Files: `crossword_tester.py`
-- Impact: Difficult for others to understand or contribute
-- Fix approach: Add docstrings to all functions, create README.md with usage examples
-
-**No Logging Framework:**
-- Issue: Uses `print()` statements for all output
-- Files: `crossword_tester.py` (lines 145, 146, 156, 194, 202, 205, 237, 249, 256, 268)
-- Impact: Cannot control log levels, no structured logging, difficult to debug
-- Fix approach: Use `logging` module with different levels (DEBUG, INFO, WARNING, ERROR)
-
-**No Type Hints:**
-- Issue: Only basic type hints (`ans: str`) on one function
-- Files: `crossword_tester.py` (line 38)
-- Impact: No static type checking, IDE autocompletion limited
-- Fix approach: Add full type hints using `mypy` validation
-
-**Inconsistent Naming:**
-- Issue: Mix of English and Polish in variables and strings
-- Files: `crossword_tester.py` (lines 138-139, 170, 268)
-- Impact: Confusing for non-Polish speakers, inconsistent codebase
-- Fix approach: Standardize on English for code, Polish only for user-facing strings
+3. **Scalability Improvements**
+   - Implement streaming for large datasets
+   - Add horizontal scaling capabilities
+   - Optimize database queries and indexing
 
 ---
 
-*Concerns audit: 2026-05-05*
+**Last Updated**: 2026-05-09
+**Status**: Active monitoring required
+**Priority**: Security and performance concerns should be addressed immediately
