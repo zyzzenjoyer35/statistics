@@ -44,5 +44,5 @@ results_details.csv
 results_log.json
 
 
-.planning
-.claude
+/.planning/
+/.claude/
