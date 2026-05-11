@@ -2,23 +2,20 @@
 __pycache__/
 *.py[cod]
 *$py.class
-.env.local
 venv/
+.venv/
 
-# Node.js / Dependencies
+# Node.js - ignoruje node_modules wszędzie, gdzie się pojawią
 node_modules/
-backend/node_modules/
-frontend/node_modules/
+**/node_modules/
 
 # Build outputs
 frontend/build/
-frontend/.env.local
-frontend/.env.development.local
-frontend/.env.test.local
-frontend/.env.production.local
+dist/
 
-# Logs
-logs/*.log
+# Logs i błędy
+logs/
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -27,22 +24,20 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 
-# IDE
+# IDE i narzędzia AI
 .vscode/
 .idea/
+.claude/
+.planning/
 *.swp
-*.swo
 
-# Environment
+# Environment (bardzo ważne!)
 .env
-.env.local
+.env.*
+!.env.example
 
-# Dane i wyniki (nie chcemy ich w repozytorium)
-.idea
+# Dane i wyniki
 results.csv
 results_details.csv
 results_log.json
-
-
-/.planning/
-/.claude/
+dataset.json
